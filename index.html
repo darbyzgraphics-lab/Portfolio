@@ -518,9 +518,11 @@ a{
   cursor:pointer;
 }
 
-.filters button:hover{
+.filters button:hover,
+.filters button.active{
   background:linear-gradient(135deg,var(--lime),var(--yellow));
   color:#050505;
+  box-shadow:0 10px 30px rgba(182,255,46,.18);
 }
   
 .work-grid{
@@ -1033,6 +1035,12 @@ footer strong{
     </p>
   </div>
 
+  <div class="filters" id="portfolioFilters">
+    <button class="active" type="button" onclick="filterProjects('all')">All</button>
+    <button type="button" onclick="filterProjects('energy')">Energy</button>
+    <button type="button" onclick="filterProjects('other')">Other</button>
+  </div>
+
   <div class="work-grid" id="portfolioGrid">
     <p class="loading-text">Loading portfolio...</p>
   </div>
@@ -1191,7 +1199,7 @@ footer strong{
 <script>
 const GITHUB_USERNAME = 'darbyzgraphics-lab';
 const REPO_NAME = 'Portfolio';
-const FOLDER = '';
+const FOLDERS = ['energy', 'other'];
 
 const portfolioGrid = document.getElementById('portfolioGrid');
 const lightbox = document.getElementById('lightbox');
@@ -1218,55 +1226,23 @@ function closeLightbox(){
 lightboxClose.addEventListener('click', closeLightbox);
 
 lightbox.addEventListener('click', event => {
-  if(event.target === lightbox) closeLightbox();
+  if(event.target === lightbox){
+    closeLightbox();
+  }
 });
 
 document.addEventListener('keydown', event => {
-  if(event.key === 'Escape') closeLightbox();
-});
-
-<script>
-const GITHUB_USERNAME = 'darbyzgraphics-lab';
-const REPO_NAME = 'Portfolio';
-
-const portfolioGrid = document.getElementById('portfolioGrid');
-const lightbox = document.getElementById('lightbox');
-const lightboxImg = document.getElementById('lightboxImg');
-const lightboxClose = document.getElementById('lightboxClose');
-
-function cleanName(filename){
-  return filename
-    .replace(/\.[^/.]+$/, '')
-    .replace(/[-_]/g, ' ')
-    .replace(/\b\w/g, letter => letter.toUpperCase());
-}
-
-function openLightbox(src){
-  lightboxImg.src = src;
-  lightbox.classList.add('active');
-}
-
-function closeLightbox(){
-  lightbox.classList.remove('active');
-  lightboxImg.src = '';
-}
-
-lightboxClose.addEventListener('click', closeLightbox);
-
-lightbox.addEventListener('click', event => {
-  if(event.target === lightbox) closeLightbox();
-});
-
-document.addEventListener('keydown', event => {
-  if(event.key === 'Escape') closeLightbox();
+  if(event.key === 'Escape'){
+    closeLightbox();
+  }
 });
 
 async function fetchFolder(folderName){
   const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${folderName}`;
-
   const response = await fetch(apiUrl, { cache:'no-store' });
 
   if(!response.ok){
+    console.warn(`Folder not found or blocked: ${folderName}`);
     return [];
   }
 
@@ -1282,63 +1258,61 @@ async function fetchFolder(folderName){
 }
 
 async function loadPortfolio(){
+  portfolioGrid.innerHTML = '<p class="loading-text">Loading portfolio...</p>';
 
-  portfolioGrid.innerHTML = '';
+  try{
+    const folderResults = await Promise.all(FOLDERS.map(folder => fetchFolder(folder)));
+    const allImages = folderResults
+      .flat()
+      .sort((a,b) => b.name.localeCompare(a.name));
 
-  const folders = ['energy', 'other'];
+    portfolioGrid.innerHTML = '';
 
-  let allImages = [];
+    if(allImages.length === 0){
+      portfolioGrid.innerHTML = '<p class="loading-text">No images found yet. Upload images into the energy or other folders.</p>';
+      return;
+    }
 
-  for(const folder of folders){
-    const images = await fetchFolder(folder);
-    allImages.push(...images);
+    allImages.forEach((file,index) => {
+      const card = document.createElement('div');
+      card.className = 'work-card loaded';
+      card.dataset.category = file.category;
+      card.style.animationDelay = `${index * 60}ms`;
+
+      card.innerHTML = `
+        <img src="${file.download_url}" alt="${cleanName(file.name)}" loading="lazy">
+        <div class="work-overlay">
+          <small>${file.category}</small>
+          <span>${cleanName(file.name)}</span>
+        </div>
+      `;
+
+      card.addEventListener('click', () => openLightbox(file.download_url));
+      portfolioGrid.appendChild(card);
+    });
+
+  }catch(error){
+    console.error(error);
+    portfolioGrid.innerHTML = '<p class="loading-text">Portfolio failed to load. Check your GitHub repo is public and the folders are called energy and other.</p>';
   }
-
-  if(allImages.length === 0){
-    portfolioGrid.innerHTML =
-      '<p class="loading-text">No images found yet.</p>';
-    return;
-  }
-
-  allImages.forEach((file,index) => {
-
-    const card = document.createElement('div');
-    card.className = 'work-card loaded';
-    card.dataset.category = file.category;
-
-    card.style.animationDelay = `${index * 60}ms`;
-
-    card.innerHTML = `
-      <img src="${file.download_url}" alt="${cleanName(file.name)}" loading="lazy">
-
-      <div class="work-overlay">
-        <small>${file.category}</small>
-        <span>${cleanName(file.name)}</span>
-      </div>
-    `;
-
-    card.addEventListener('click', () => openLightbox(file.download_url));
-
-    portfolioGrid.appendChild(card);
-
-  });
-
 }
 
 function filterProjects(category){
-
   const projects = document.querySelectorAll('.work-card');
+  const buttons = document.querySelectorAll('.filters button');
+
+  buttons.forEach(button => {
+    const buttonText = button.textContent.trim().toLowerCase();
+    button.classList.toggle('active', buttonText === category || (category === 'all' && buttonText === 'all'));
+  });
 
   projects.forEach(project => {
-
     if(category === 'all' || project.dataset.category === category){
       project.style.display = 'block';
     }else{
       project.style.display = 'none';
     }
-
   });
-
 }
 
 loadPortfolio();
