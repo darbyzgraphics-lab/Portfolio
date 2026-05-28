@@ -499,7 +499,30 @@ a{
   letter-spacing:.14em;
   font-weight:800;
 }
+.filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:.8rem;
+  margin-bottom:1.5rem;
+}
 
+.filters button{
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.06);
+  color:white;
+  border-radius:999px;
+  padding:.8rem 1.1rem;
+  font-weight:900;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  cursor:pointer;
+}
+
+.filters button:hover{
+  background:linear-gradient(135deg,var(--lime),var(--yellow));
+  color:#050505;
+}
+  
 .work-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
@@ -1202,50 +1225,120 @@ document.addEventListener('keydown', event => {
   if(event.key === 'Escape') closeLightbox();
 });
 
-async function loadPortfolio(){
-  try{
-    const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${FOLDER}`;
-    const response = await fetch(apiUrl, { cache:'no-store' });
+<script>
+const GITHUB_USERNAME = 'darbyzgraphics-lab';
+const REPO_NAME = 'Portfolio';
 
-    if(!response.ok){
-      throw new Error('GitHub content could not be loaded');
-    }
+const portfolioGrid = document.getElementById('portfolioGrid');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+const lightboxClose = document.getElementById('lightboxClose');
 
-    const files = await response.json();
+function cleanName(filename){
+  return filename
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, letter => letter.toUpperCase());
+}
 
-    const images = files
-      .filter(file => file.type === 'file')
-      .filter(file => /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name))
-      .sort((a,b) => b.name.localeCompare(a.name));
+function openLightbox(src){
+  lightboxImg.src = src;
+  lightbox.classList.add('active');
+}
 
-    portfolioGrid.innerHTML = '';
+function closeLightbox(){
+  lightbox.classList.remove('active');
+  lightboxImg.src = '';
+}
 
-    if(images.length === 0){
-      portfolioGrid.innerHTML = '<p class="loading-text">No images found yet. Upload images to the repo root.</p>';
-      return;
-    }
+lightboxClose.addEventListener('click', closeLightbox);
 
-    images.forEach((file,index) => {
-      const card = document.createElement('div');
-      card.className = 'work-card loaded';
-      card.style.animationDelay = `${index * 60}ms`;
+lightbox.addEventListener('click', event => {
+  if(event.target === lightbox) closeLightbox();
+});
 
-      card.innerHTML = `
-        <img src="${file.download_url}" alt="${cleanName(file.name)}" loading="lazy">
-        <div class="work-overlay">
-          <small>Energy Brand Visual</small>
-          <span>${cleanName(file.name)}</span>
-        </div>
-      `;
+document.addEventListener('keydown', event => {
+  if(event.key === 'Escape') closeLightbox();
+});
 
-      card.addEventListener('click', () => openLightbox(file.download_url));
-      portfolioGrid.appendChild(card);
-    });
+async function fetchFolder(folderName){
+  const apiUrl = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${folderName}`;
 
-  }catch(error){
-    console.error(error);
-    portfolioGrid.innerHTML = '<p class="loading-text">Portfolio failed to load. Make sure the GitHub repo is public and your images are in the repo root.</p>';
+  const response = await fetch(apiUrl, { cache:'no-store' });
+
+  if(!response.ok){
+    return [];
   }
+
+  const files = await response.json();
+
+  return files
+    .filter(file => file.type === 'file')
+    .filter(file => /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name))
+    .map(file => ({
+      ...file,
+      category: folderName
+    }));
+}
+
+async function loadPortfolio(){
+
+  portfolioGrid.innerHTML = '';
+
+  const folders = ['energy', 'other'];
+
+  let allImages = [];
+
+  for(const folder of folders){
+    const images = await fetchFolder(folder);
+    allImages.push(...images);
+  }
+
+  if(allImages.length === 0){
+    portfolioGrid.innerHTML =
+      '<p class="loading-text">No images found yet.</p>';
+    return;
+  }
+
+  allImages.forEach((file,index) => {
+
+    const card = document.createElement('div');
+    card.className = 'work-card loaded';
+    card.dataset.category = file.category;
+
+    card.style.animationDelay = `${index * 60}ms`;
+
+    card.innerHTML = `
+      <img src="${file.download_url}" alt="${cleanName(file.name)}" loading="lazy">
+
+      <div class="work-overlay">
+        <small>${file.category}</small>
+        <span>${cleanName(file.name)}</span>
+      </div>
+    `;
+
+    card.addEventListener('click', () => openLightbox(file.download_url));
+
+    portfolioGrid.appendChild(card);
+
+  });
+
+}
+
+function filterProjects(category){
+
+  const projects = document.querySelectorAll('.work-card');
+
+  projects.forEach(project => {
+
+    if(category === 'all' || project.dataset.category === category){
+      project.style.display = 'block';
+    }else{
+      project.style.display = 'none';
+    }
+
+  });
+
 }
 
 loadPortfolio();
